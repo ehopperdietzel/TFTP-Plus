@@ -26,6 +26,23 @@ UDPClientSocket.bind(("127.0.0.1", 6000))
 
 print("\nWelcome to TFTP+\n")
 
+def printIndex():
+    length = len(currentIndexData)
+    offset = 0
+    print("\nCurrent server directory index:\n")
+    index = 0
+    while offset != length:
+        isDir,nameLen = struct.unpack('=?I',currentIndexData[offset:offset+5])
+        offset+=5
+        name = struct.unpack('='+str(nameLen)+'s',currentIndexData[offset:offset+nameLen])[0]
+        offset+=nameLen
+        if isDir:
+            print("- ["+str(index)+"][DIR]\t"+ name)
+        else:
+            print("- ["+str(index)+"][FILE]\t"+ name)
+        index+=1
+
+
 def getNextMessage(timeoutSecs):
 
     if len(select.select([UDPClientSocket],[],[],timeoutSecs)[0]) == 0:
@@ -49,6 +66,20 @@ def handleError(error):
     elif error == -3:
         print("\nError: Expired token.")
         logout()
+    elif error == -4:
+        print("\nError: Prohibited directory access.")
+    elif error == -5:
+        print("\nError: Item selected is not a directory or doesn't exist.")
+
+def handleLostACK(event):
+    global userId,expDatetime,token,serverAddressPort
+    eventId = getMsgId(event)
+
+    # If server missed index packet ACK
+    if eventId == 2:
+        _,packetNumber,bytesSize,data = eveIndexTransfer.unpack(event)
+        request = reqIndexACKTransfer.pack(3,packetNumber,userId,expDatetime,token)
+        UDPClientSocket.sendto(request, serverAddressPort)
 
 def login():
     global userId,expDatetime,token,serverAddressPort
@@ -96,6 +127,8 @@ def login():
                 return
             elif eventId < 0:
                 handleError(eventId)
+            else:
+                handleLostACK(event)
 
 def help():
     print("\nList of Commands:\n")
@@ -112,7 +145,7 @@ def help():
 
 
 
-def index():
+def getIndex():
     global userId,expDatetime,token,currentIndexData
     request = reqIndex.pack(1,userId,expDatetime,token)
     print("\nWaiting for current directory index size response...")
@@ -146,7 +179,8 @@ def index():
                         else:
                             print("\nTransfer started !")
                             transferFinished = False
-                            indexData = bytearray()
+                            indexData = bytearray(indexSize)
+                            totalBytesReceived = 0
                             while transferFinished == False:
                                 if event == False:
                                     print("\nTransfer failed due to server response timeout.")
@@ -155,32 +189,105 @@ def index():
                                     eventId = getMsgId(event)
                                     if eventId == 2:
                                         _,packetNumber,bytesSize,data = eveIndexTransfer.unpack(event)
+
+                                        # Sends ACK
                                         request = reqIndexACKTransfer.pack(3,packetNumber,userId,expDatetime,token)
                                         UDPClientSocket.sendto(request, serverAddressPort)
-                                        indexData += data[:bytesSize]
-                                        lenIndexData = len(indexData)
-                                        print("\n"+str(100*lenIndexData/indexSize)+"% of directory index received.")
-                                        if lenIndexData == indexSize:
+
+                                        # Stores packet
+                                        indexData[totalBytesReceived:totalBytesReceived+bytesSize] = data[:bytesSize]
+                                        totalBytesReceived += bytesSize
+
+                                        print("\n"+str(100*totalBytesReceived/indexSize)+"% of directory index received.")
+                                        if totalBytesReceived == indexSize:
                                             print("\nDirectory index received successfully.")
                                             currentIndexData = indexData
+                                            printIndex()
                                             return
                                         event = getNextMessage(60)
                                     elif eventId < 0:
                                         handleError(eventId)
                                         return
+                                    else:
+                                        handleLostACK(event)
                     print("\nIndex transfer failed due to server response timeout.")
                     return
+            elif eventId < 0:
+                handleError(eventId)
+                return
+            else:
+                handleLostACK(event)
+
+def goBack():
+    global userId,expDatetime,token,currentIndexData
+    request = reqBack.pack(4,userId,expDatetime,token)
+    print("\nWaiting for go back response...")
+
+    # Retry login 4 times if server doesn't reply
+    for i in range(4):
+        UDPClientSocket.sendto(request, serverAddressPort)
+        event = getNextMessage(10)
+        if event == False:
+            print("\nSending go back request again " + str(i+1))
+        else:
+            eventId = getMsgId(event)
+            if eventId == 3:
+                print("\nGo back successfull.")
+                getIndex()
+                return
+            elif eventId < 0:
+                handleError(eventId)
+                return
+            else:
+                handleLostACK(event)
+    print("\nSending go back request failed due to server response timout.")
+
+def goTo(index):
+    global userId,expDatetime,token,currentIndexData
+    request = reqGoto.pack(5,index,userId,expDatetime,token)
+    print("\nWaiting for goto response...")
+
+    # Retry login 4 times if server doesn't reply
+    for i in range(4):
+        UDPClientSocket.sendto(request, serverAddressPort)
+        event = getNextMessage(10)
+        if event == False:
+            print("\nSending goto request again " + str(i+1))
+        else:
+            eventId = getMsgId(event)
+            if eventId == 4:
+                print("\nGoto successfull.")
+                getIndex()
+                return
+            elif eventId < 0:
+                handleError(eventId)
+                return
+            else:
+                handleLostACK(event)
+    print("\nSending goto request failed due to server response timout.")
 
 while True:
 
+    # Handle problematic messages
+    event = getNextMessage(0)
+    if event:
+        handleLostACK(event)
+
+    # Print help info
     help()
 
-    command = raw_input("\n>> ").split()
+    # Read input command
+    command = raw_input("\n>> ").split(' ')
 
+    # Process command
     if command[0] == 'login':
         login()
     elif command[0] == 'logout':
         logout()
     elif command[0] == 'index':
-        index()
+        getIndex()
+    elif command[0] == 'back':
+        goBack()
+    elif command[0] == 'goto':
+        goTo(int(command[1]))
 

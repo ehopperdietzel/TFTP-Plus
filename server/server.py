@@ -212,7 +212,50 @@ def processIndexACK(message,address):
                 outTransfers[i]["lastACK"] = datetime.now()
                 return
             
+def goBackRequest(message,address):
+    _,userId,expDatetime,token = reqBack.unpack(message)
+    if validateToken(address,userId,expDatetime,token):
+        # Here you should validate if user has access privileges in target directory ( not implemented )
+        for i in range(len(users)):
+            if users[i]["id"] == userId:
+                users[i]["path"] += "/.."
 
+        print("\nGo back request successfull.")
+        event = eveBack.pack(3)
+        UDPServerSocket.sendto(event, address)
+
+def goToRequest(message,address):
+    _,index,userId,expDatetime,token = reqGoto.unpack(message)
+    if validateToken(address,userId,expDatetime,token):
+        # Here you should validate if user has access privileges in target directory ( not implemented )
+        user = findUserById(userId)
+        files = os.listdir(user["path"])
+        lenFiles = len(files)
+
+        # Check if index exist
+        if index >= lenFiles:
+            event = eveNotDirErr.pack(-5)
+            UDPServerSocket.sendto(event, address)
+            print("\nError: Dir index doesn't exist.")
+            return
+
+        # Check if item at index is dir
+        newPath = user["path"] + "/" + files[index]
+        if not os.path.isdir(newPath):
+            event = eveNotDirErr.pack(-5)
+            UDPServerSocket.sendto(event, address)
+            print("\nError: Item at index is not a dir.")
+            return
+        else:
+            for i in range(len(users)):
+                if users[i]["id"] == userId:
+                    users[i]["path"] = newPath
+                    event = eveGoto.pack(4)
+                    UDPServerSocket.sendto(event, address)
+                    print("\nGoto request successfull.")
+
+        
+        
 
 while(True):
 
@@ -231,6 +274,12 @@ while(True):
     # Index directory ACK
     if messageId == 3:
         processIndexACK(message,address)
+    # Go back request
+    if messageId == 4:
+        goBackRequest(message,address)
+    # Goto request
+    if messageId == 5:
+        goToRequest(message,address)
                 
     processOutTransfers()
 

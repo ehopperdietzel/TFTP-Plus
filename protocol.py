@@ -6,7 +6,7 @@ def getMsgId(msg):
     else:
         return struct.Struct('=b').unpack(msg[0])[0]
 
-
+# Python structs documentation
 # https://docs.python.org/3/library/struct.html
 
 # Requests ( from client to server ) -----------------------------------------------------------------
@@ -31,6 +31,21 @@ reqIndexInitTransfer = struct.Struct('=b ? H 14s 32s')
 # signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
 reqIndexACKTransfer = struct.Struct('=b I H 14s 32s')
 
+# Tell the server to go to previous directory
+# request id(4)     | user id               | token expiration date | token
+# signed char       | unsigned short        | char array[12]        | char array[32]
+reqBack = struct.Struct('=b H 14s 32s')
+
+# Tell the server to go to directory at index i
+# request id(5)     | index of the dir      | user id               | token expiration date | token
+# signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
+reqGoto = struct.Struct('=b I H 14s 32s')
+
+# Tell the server to get size of file at index i
+# request id(5)     | index of the dir      | user id               | token expiration date | token
+# signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
+reqFileSize = struct.Struct('=b I H 14s 32s')
+
 
 # Events ( from server to client ) --------------------------------------------------------------------
 
@@ -49,6 +64,16 @@ eveIndex = struct.Struct('=b Q')
 # signed char       | unsigned int  | unsigned short    | void *[505]
 eveIndexTransfer = struct.Struct('=b I H 505s')
 
+# Go back success response
+# event id(3) 
+# signed char  
+eveBack = struct.Struct('=b')
+
+# Goto success response
+# event id(4) 
+# signed char  
+eveGoto = struct.Struct('=b')
+
 # Login error (invalid credentials)
 # event id(-1) 
 # signed char  
@@ -63,3 +88,13 @@ eveAuthErr = struct.Struct('=b')
 # event id(-3) 
 # signed char  
 eveExpErr = struct.Struct('=b')
+
+# Prohibited directory access error
+# event id(-4) 
+# signed char  
+evePohibitedDirAccessErr = struct.Struct('=b')
+
+# Item at index is not a directory or doesn't exist
+# event id(-5) 
+# signed char  
+eveNotDirErr = struct.Struct('=b')
