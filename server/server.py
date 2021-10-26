@@ -144,14 +144,12 @@ def indexRequest(message,address):
         print("\nIndex size is: "+str(totalBytes)+" bytes.")
         event = eveIndex.pack(2,totalBytes)
 
-        # If directory is empty ( client shouldn't request transfer )
-        if totalBytes == 0:
-            print("\nDirectory is empty.")
-            return
-
         for i in range(4):
             print("\nSending index size to "+user["username"]+".")
             UDPServerSocket.sendto(event, address)
+
+            if totalBytes == 0:
+                return
 
             request,addr = getNextMessage()
 
@@ -216,6 +214,7 @@ def goBackRequest(message,address):
     _,userId,expDatetime,token = reqBack.unpack(message)
     if validateToken(address,userId,expDatetime,token):
         # Here you should validate if user has access privileges in target directory ( not implemented )
+
         for i in range(len(users)):
             if users[i]["id"] == userId:
                 users[i]["path"] += "/.."

@@ -42,10 +42,19 @@ reqBack = struct.Struct('=b H 14s 32s')
 reqGoto = struct.Struct('=b I H 14s 32s')
 
 # Tell the server to get size of file at index i
-# request id(5)     | index of the dir      | user id               | token expiration date | token
+# request id(6)     | index of the file     | user id               | token expiration date | token
 # signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
 reqFileSize = struct.Struct('=b I H 14s 32s')
 
+# Tell the server to start or cancel transfer of file
+# request id(7)     | answer True or False  | user id               | token expiration date | token
+# signed char       |  _Bool                | unsigned short        | char array[12]        | char array[32]
+reqFileInitTransfer = struct.Struct('=b ? H 14s 32s')
+
+# Index transfer packet ACK
+# request id(3)     | packet number         | user id               | token expiration date | token
+# signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
+reqIndexACKTransfer = struct.Struct('=b I H 14s 32s')
 
 # Events ( from server to client ) --------------------------------------------------------------------
 
@@ -98,3 +107,4 @@ evePohibitedDirAccessErr = struct.Struct('=b')
 # event id(-5) 
 # signed char  
 eveNotDirErr = struct.Struct('=b')
+

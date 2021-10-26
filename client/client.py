@@ -31,6 +31,9 @@ def printIndex():
     offset = 0
     print("\nCurrent server directory index:\n")
     index = 0
+    if length == 0:
+        print("Directory is empty.")
+        return
     while offset != length:
         isDir,nameLen = struct.unpack('=?I',currentIndexData[offset:offset+5])
         offset+=5
@@ -133,14 +136,14 @@ def login():
 def help():
     print("\nList of Commands:\n")
     if token == "":
-        print("     - login: Opens login prompt.")   
+        print("     - login        : Open login prompt.")   
     else:
-        print("     - logout       : Ends user session.")
-        print("     - index        : Gets current server index directory.")
-        print("     - back         : Gets previus server index directory.")
-        print("     - goto i       : Goes to the directory at index i and gets the index directory.")
-        print("     - get i path   : Get file at index i and stores it in 'path'.")
-        print("     - send path    : Sends local file located in 'path' to the current path in server.")      
+        print("     - logout       : End user session.")
+        print("     - index        : Get current server index directory.")
+        print("     - back         : Get previus server index directory.")
+        print("     - goto i       : Go to the directory at index i and gets the index directory.")
+        print("     - get i path   : Get file at index i and stores it with the name and location specified in 'path'.")
+        print("     - send path    : Send local file located in 'path' to the current path in server.")      
 
 
 
@@ -162,6 +165,13 @@ def getIndex():
             # Index size received
             if eventId == 2:
                 _,indexSize = eveIndex.unpack(event)
+
+                # If directory is empty
+                if indexSize == 0:
+                    currentIndexData = bytearray()
+                    printIndex()
+                    return
+
                 print("\nGot index size: "+str(indexSize)+" bytes")
                 if indexSize == 0:
                     print("\nCurrent directory is empty, use 'back' command to go back.")
@@ -180,7 +190,12 @@ def getIndex():
                             print("\nTransfer started !")
                             transferFinished = False
                             indexData = bytearray(indexSize)
+                            totalPackets = int(indexSize/505)
+                            if indexSize % 505 != 0:
+                                totalPackets += 1
+                            packetsReceived = [False]*totalPackets
                             totalBytesReceived = 0
+
                             while transferFinished == False:
                                 if event == False:
                                     print("\nTransfer failed due to server response timeout.")
@@ -194,16 +209,19 @@ def getIndex():
                                         request = reqIndexACKTransfer.pack(3,packetNumber,userId,expDatetime,token)
                                         UDPClientSocket.sendto(request, serverAddressPort)
 
-                                        # Stores packet
-                                        indexData[totalBytesReceived:totalBytesReceived+bytesSize] = data[:bytesSize]
-                                        totalBytesReceived += bytesSize
+                                        # Check if packet has already been received
+                                        if not packetsReceived[packetNumber]:
+                                            # Stores packet
+                                            indexData[totalBytesReceived:totalBytesReceived+bytesSize] = data[:bytesSize]
+                                            totalBytesReceived += bytesSize
 
-                                        print("\n"+str(100*totalBytesReceived/indexSize)+"% of directory index received.")
-                                        if totalBytesReceived == indexSize:
-                                            print("\nDirectory index received successfully.")
-                                            currentIndexData = indexData
-                                            printIndex()
-                                            return
+                                            print("\n"+str(100*totalBytesReceived/indexSize)+"% of directory index received.")
+                                            if totalBytesReceived == indexSize:
+                                                print("\nDirectory index received successfully.")
+                                                currentIndexData = indexData
+                                                printIndex()
+                                                return
+
                                         event = getNextMessage(60)
                                     elif eventId < 0:
                                         handleError(eventId)
