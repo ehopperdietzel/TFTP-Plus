@@ -41,10 +41,10 @@ reqBack = struct.Struct('=b H 14s 32s')
 # signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
 reqGoto = struct.Struct('=b I H 14s 32s')
 
-# Tell the server to get size of file at index i
+# Tell the server to get size and name of file at index i
 # request id(6)     | index of the file     | user id               | token expiration date | token
 # signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
-reqFileSize = struct.Struct('=b I H 14s 32s')
+reqFileInfo = struct.Struct('=b I H 14s 32s')
 
 # Tell the server to start or cancel transfer of file
 # request id(7)     | answer True or False  | user id               | token expiration date | token
@@ -52,9 +52,9 @@ reqFileSize = struct.Struct('=b I H 14s 32s')
 reqFileInitTransfer = struct.Struct('=b ? H 14s 32s')
 
 # Index transfer packet ACK
-# request id(3)     | packet number         | user id               | token expiration date | token
-# signed char       | unsigned int          | unsigned short        | char array[12]        | char array[32]
-reqIndexACKTransfer = struct.Struct('=b I H 14s 32s')
+# request id(8)     | file index    | packet number         | user id               | token expiration date | token
+# signed char       | unsigned int  | unsigned int          | unsigned short        | char array[12]        | char array[32]
+reqFileACKTransfer = struct.Struct('=b I I H 14s 32s')
 
 # Events ( from server to client ) --------------------------------------------------------------------
 
@@ -83,6 +83,16 @@ eveBack = struct.Struct('=b')
 # signed char  
 eveGoto = struct.Struct('=b')
 
+# File Size and name response
+# event id(5)       | file size in bytes    | file name
+# signed char       | unsigned long long    | char array[403]
+eveFileInfo = struct.Struct('=b Q 503s') 
+
+# File Transfer
+# event id(6)       | file index    | packet number | bytes sent        | data
+# signed char       | unsigned int  | unsigned int  | unsigned short    | void *[501]
+eveFileTransfer = struct.Struct('=b I I H 501s')
+
 # Login error (invalid credentials)
 # event id(-1) 
 # signed char  
@@ -107,4 +117,14 @@ evePohibitedDirAccessErr = struct.Struct('=b')
 # event id(-5) 
 # signed char  
 eveNotDirErr = struct.Struct('=b')
+
+# Item at index is not a file or doesn't exist
+# event id(-6) 
+# signed char  
+eveNotFileErr = struct.Struct('=b')
+
+# Prohibited file access error
+# event id(-7) 
+# signed char  
+evePohibitedFileAccessErr = struct.Struct('=b')
 

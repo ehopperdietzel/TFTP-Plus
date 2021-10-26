@@ -15,10 +15,10 @@ secret          = "SECRET_KEY"
 ipAddr          = "127.0.0.1"
 port            = 3000
 bufferSize      = 512
-timeoutSecs     = 2
 
 users           = [{"id":0,"username":"eduardo","password":"123","path":"./data/eduardo"}]
 outTransfers    = []
+maxActivePackets = 20
 
  
 # Create socket
@@ -27,8 +27,7 @@ UDPServerSocket.bind((ipAddr, port))
 
 print("Welcome to the TFTP+ server")
 
-def getNextMessage():
-    global timeoutSecs
+def getNextMessage(timeoutSecs):
     if len(select.select([UDPServerSocket],[],[],timeoutSecs)[0]) == 0:
         return (False,False)
     else:
@@ -89,11 +88,15 @@ def processOutTransfers():
         # Check if trasnfer timedout
         if transfer["lastACK"] + transferTimeout < datetime.now():
             print("\nIndex transfer failed due to 60 secconds ACK timeout.")
+
+            if "fd" in transfer:
+                transfer["fd"].close()
+
             outTransfers.pop(i)
             return
         
         # Index transfer
-        if transfer["transferType"] == 2:
+        if transfer["transferType"] == 1:
             activePackets = 0 # Packets being send
             sentPackets = 0 # Packets that received ACK
             for packet in transfer["packets"]:
@@ -111,7 +114,7 @@ def processOutTransfers():
                 return
             else:
                 index = 0
-                while activePackets < 10 and index < totalPackets:
+                while activePackets < maxActivePackets and index < totalPackets:
                     packet = transfer["packets"][index]
                     # If the packet hasn't received ACK and hasn't been sent or ACK has timed out, it is sent again
                     if packet["receivedACK"] == False and (packet["lastSend"] == None or packet["lastSend"] + packetTimeout < datetime.now()):
@@ -120,6 +123,39 @@ def processOutTransfers():
                         UDPServerSocket.sendto(event, transfer["client"])
                         outTransfers[i]["packets"][index]["lastSend"] = datetime.now()
                     index+=1
+
+        if transfer["transferType"] == 2:
+            activePackets = 0 # Packets being send
+            sentPackets = 0 # Packets that received ACK
+            for packet in transfer["packets"]:
+                if packet["receivedACK"] == False and packet["lastSend"] != None and packet["lastSend"] + packetTimeout > datetime.now():
+                    activePackets += 1
+                if packet["receivedACK"] == True:
+                    sentPackets += 1
+
+            totalPackets = len(transfer["packets"])
+            print("\n"+str(100*sentPackets/totalPackets)+"% file data sent to user " + transfer["username"])
+
+            fd = transfer['fd']
+            if sentPackets == totalPackets:
+                print("\nFile transfer finished successfully.")
+                fd.close()
+                outTransfers.pop(i)
+                return
+            else:
+                index = 0
+                while activePackets < maxActivePackets and index < totalPackets:
+                    packet = transfer["packets"][index]
+                    # If the packet hasn't received ACK and hasn't been sent or ACK has timed out, it is sent again
+                    if packet["receivedACK"] == False and (packet["lastSend"] == None or packet["lastSend"] + packetTimeout < datetime.now()):
+                        activePackets += 1
+                        fd.seek(501*index)
+                        print(packet["length"])
+                        event = eveFileTransfer.pack(6,transfer["fileIndex"],index,packet["length"],fd.read(packet["length"]))
+                        UDPServerSocket.sendto(event, transfer["client"])
+                        outTransfers[i]["packets"][index]["lastSend"] = datetime.now()
+                    index+=1
+                
                         
 
 
@@ -151,7 +187,7 @@ def indexRequest(message,address):
             if totalBytes == 0:
                 return
 
-            request,addr = getNextMessage()
+            request,addr = getNextMessage(30)
 
             if request:
                 messageId = getMsgId(request)
@@ -165,7 +201,7 @@ def indexRequest(message,address):
                         if answer == True:
                             user = findUserById(userId)
                             # Create the new transfer
-                            newTransfer = {"transferType":2,"lastACK":datetime.now(),"client":addr,"username":user["username"],"packets":[]}
+                            newTransfer = {"transferType":1,"lastACK":datetime.now(),"client":addr,"username":user["username"],"packets":[]}
 
                             # Total packets to send
                             totalPackets = int(totalBytes/505)
@@ -253,32 +289,129 @@ def goToRequest(message,address):
                     UDPServerSocket.sendto(event, address)
                     print("\nGoto request successfull.")
 
-        
-        
 
+def fileRequest(message,address):
+    global outTransfers
+    _,fileIndex,userId,expDatetime,token = reqFileInfo.unpack(message)
+
+    # Check auth
+    if validateToken(address,userId,expDatetime,token):
+        
+        user = findUserById(userId)
+        files = os.listdir(user["path"])
+
+        # Check if file exists
+        if fileIndex >= len(files):
+            print("\nFile doesn't exists.")
+            event = eveNotFileErr.pack(-6)
+            UDPServerSocket.sendto(event, address)
+            return
+
+        # Check if item at index is file
+        filePath = user["path"] + "/" + files[fileIndex]
+        if os.path.isdir(filePath):
+            print("\nItem is not a file.")
+            event = eveNotFileErr.pack(-6)
+            UDPServerSocket.sendto(event, address)
+            return
+
+
+        totalBytes = os.path.getsize(filePath)
+        fileName = files[fileIndex]
+        event = eveFileInfo.pack(5,totalBytes,fileName)
+
+        for i in range(4):
+            UDPServerSocket.sendto(event, address)
+            request,addr = getNextMessage(30)
+
+            if request:
+                messageId = getMsgId(request)
+                if messageId == 7:
+                    _,answer,userId,expDatetime,token = reqFileInitTransfer.unpack(request)
+
+                    # Check auth again
+                    if validateToken(addr,userId,expDatetime,token):
+
+                        # Init index transfer ( server must keep the client address and port because auth data wont be sent during transfer )
+                        if answer == True:
+                            user = findUserById(userId)
+                            fd = open(filePath,"r")
+                            # Create the new transfer
+                            newTransfer = {"fd":fd,"transferType":2,"filePath":filePath,"lastACK":datetime.now(),"fileIndex":fileIndex,"client":addr,"username":user["username"],"packets":[]}
+
+                            # Total packets to send
+                            totalPackets = int(totalBytes/501)
+                            if totalBytes % 501 != 0:
+                                totalPackets += 1
+                            
+                            # Each packet contains max 501 bytes of data
+                            for j in range(totalPackets):
+                                offset = j*501
+                                length = 501
+                                if j == totalPackets-1:
+                                    length = totalBytes - offset
+                                
+                                newTransfer["packets"].append({"receivedACK":False,"lastSend":None,"length":length})
+                            
+                            outTransfers.append(newTransfer)
+                            print("\nTransfering file to user "+user["username"]+".")
+                            processOutTransfers()
+                            return
+                        else:
+                            print("\nClient cancelled file transfer.")
+                            return
+
+
+
+            else:
+                print("\nSending file info to "+user["username"]+" again "+str(i+1)+".")
+        
+        print("\nError: File transfer failed due to cliente response timeout.")
+        return
+
+    return       
+
+def processFilePacketACK(message,address):
+    _,fileIndex,packetNumber,userId,expDatetime,token = reqFileACKTransfer.unpack(message)
+    if validateToken(address,userId,expDatetime,token):
+        for i in range(len(outTransfers)):
+            transfer = outTransfers[i]
+            if transfer["client"] == address:
+                if "fileIndex" in transfer:
+                    if transfer["fileIndex"] == fileIndex:
+                        print("\nGot file packet ACK " + str(packetNumber))
+                        outTransfers[i]["packets"][packetNumber]["receivedACK"] = True
+                        outTransfers[i]["lastACK"] = datetime.now()
+                        return
 while(True):
 
     # Get message
-    bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
-    message = bytesAddressPair[0]
-    address = bytesAddressPair[1]
-    messageId = getMsgId(message)
+    message,address = getNextMessage(0)
 
-    # Login request
-    if messageId == 0:
-        loginRequest(message,address)
-    # Index directory request
-    if messageId == 1:
-        indexRequest(message,address)
-    # Index directory ACK
-    if messageId == 3:
-        processIndexACK(message,address)
-    # Go back request
-    if messageId == 4:
-        goBackRequest(message,address)
-    # Goto request
-    if messageId == 5:
-        goToRequest(message,address)
+    if message != False:
+        messageId = getMsgId(message)
+
+        # Login request
+        if messageId == 0:
+            loginRequest(message,address)
+        # Index directory request
+        if messageId == 1:
+            indexRequest(message,address)
+        # Index directory ACK
+        if messageId == 3:
+            processIndexACK(message,address)
+        # Go back request
+        if messageId == 4:
+            goBackRequest(message,address)
+        # Goto request
+        if messageId == 5:
+            goToRequest(message,address)
+        # File request
+        if messageId == 6:
+            fileRequest(message,address)
+        # File packet ACK
+        if messageId == 8:
+            processFilePacketACK(message,address)
                 
     processOutTransfers()
 

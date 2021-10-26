@@ -142,7 +142,7 @@ def help():
         print("     - index        : Get current server index directory.")
         print("     - back         : Get previus server index directory.")
         print("     - goto i       : Go to the directory at index i and gets the index directory.")
-        print("     - get i path   : Get file at index i and stores it with the name and location specified in 'path'.")
+        print("     - get i        : Get file at index i and stores it in './downloads'.")
         print("     - send path    : Send local file located in 'path' to the current path in server.")      
 
 
@@ -212,8 +212,10 @@ def getIndex():
                                         # Check if packet has already been received
                                         if not packetsReceived[packetNumber]:
                                             # Stores packet
-                                            indexData[totalBytesReceived:totalBytesReceived+bytesSize] = data[:bytesSize]
+                                            offset = 505*packetNumber
+                                            indexData[offset:offset+bytesSize] = data[:bytesSize]
                                             totalBytesReceived += bytesSize
+                                            packetsReceived[packetNumber] = True
 
                                             print("\n"+str(100*totalBytesReceived/indexSize)+"% of directory index received.")
                                             if totalBytesReceived == indexSize:
@@ -284,6 +286,103 @@ def goTo(index):
                 handleLostACK(event)
     print("\nSending goto request failed due to server response timout.")
 
+def getFile(index):
+    global userId,expDatetime,token,currentIndexData
+    request = reqFileInfo.pack(6,index,userId,expDatetime,token)
+    print("\nWaiting for file size response...")
+
+    # Retry login 4 times if server doesn't reply
+    for i in range(4):
+        UDPClientSocket.sendto(request, serverAddressPort)
+        event = getNextMessage(5)
+        if event == False:
+            print("\nSending file size request again " + str(i+1))
+        else:
+            eventId = getMsgId(event)
+
+            # File size received
+            if eventId == 5:
+                _,fileSize,filename = eveFileInfo.unpack(event)
+                
+                if fileSize == 0:
+                    print("\nFile contains no data.")
+                    request = reqFileInitTransfer.pack(7,False,userId,expDatetime,token)
+                    UDPClientSocket.sendto(request, serverAddressPort)
+                    print("\nFile transfer aborted.")
+                    return
+
+                # Ask if init transfer
+                print("\nFile name: "+filename.rstrip('\x00'))
+                print("\nFile size: "+str(fileSize)+" bytes")
+                ques = raw_input("\nDo you wish to init transfer? (y/n) ")
+                if ques != "y":
+                    request = reqFileInitTransfer.pack(7,False,userId,expDatetime,token)
+                    UDPClientSocket.sendto(request, serverAddressPort)
+                    print("\nFile transfer aborted.")
+                    return
+
+                
+                # Send init index transfer request
+                request = reqFileInitTransfer.pack(7,True,userId,expDatetime,token)
+
+                # Retry login 4 times if server doesn't reply
+                for j in range(4):
+                    UDPClientSocket.sendto(request, serverAddressPort)
+                    event = getNextMessage(60)
+                    if event == False:
+                        print("\nSending file transfer request again " + str(j+1))
+                    else:
+                        print("\nFile transfer started !")
+                        transferFinished = False
+                        totalPackets = int(fileSize/501)
+                        if fileSize % 501 != 0:
+                            totalPackets += 1
+                        packetsReceived = [False]*totalPackets
+                        totalBytesReceived = 0
+                        fd = open('./downloads/'+filename.rstrip('\x00'), 'w')
+
+                        while transferFinished == False:
+                            if event == False:
+                                print("\nTransfer failed due to server response timeout.")
+                                return
+                            else:
+                                eventId = getMsgId(event)
+                                if eventId == 6:
+                                    _,fileIndex,packetNumber,bytesSize,data = eveFileTransfer.unpack(event)
+
+                                    # Sends ACK
+                                    request = reqFileACKTransfer.pack(8,fileIndex,packetNumber,userId,expDatetime,token)
+                                    UDPClientSocket.sendto(request, serverAddressPort)
+
+                                    # Check if packet has already been received
+                                    if not packetsReceived[packetNumber]:
+                                        # Stores packet
+                                        offset = packetNumber*501
+                                        fd.seek(offset)
+                                        fd.write(data[:bytesSize])
+                                        totalBytesReceived += bytesSize
+                                        packetsReceived[packetNumber] = True
+
+                                        print("\n"+str(100*totalBytesReceived/fileSize)+"% of file received.")
+                                        if totalBytesReceived == fileSize:
+                                            print("\nFile received successfully.")
+                                            fd.close()
+                                            return
+
+                                    event = getNextMessage(60)
+                                elif eventId < 0:
+                                    handleError(eventId)
+                                    return
+                                else:
+                                    handleLostACK(event)
+                print("\nIndex transfer failed due to server response timeout.")
+                return
+            elif eventId < 0:
+                handleError(eventId)
+                return
+            else:
+                handleLostACK(event)
+
 while True:
 
     # Handle problematic messages
@@ -308,4 +407,6 @@ while True:
         goBack()
     elif command[0] == 'goto':
         goTo(int(command[1]))
+    elif command[0] == 'get':
+        getFile(int(command[1]))
 
