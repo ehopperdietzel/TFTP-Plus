@@ -1,0 +1,14 @@
+1. Iniciar el servidor con sudo (puerto 69)
+
+    sudo python server.py
+
+2. Iniciar cliente
+
+    python client.py
+
+3. Iniciar sesión con el comando 'login' y las siguientes credenciales:
+
+    username : christian
+    password : 123
+
+4. Utilizar los comandos definidos en la terminal.
