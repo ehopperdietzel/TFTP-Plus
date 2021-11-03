@@ -12,3 +12,7 @@
     password : 123
 
 4. Utilizar los comandos definidos en la terminal.
+
+
+Aunque el protocolo permite el envío de múltiples archivos simultaneos esto
+no fue considerado en la implementación por simplicidad.

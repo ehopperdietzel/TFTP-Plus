@@ -1,5 +1,5 @@
 # TFTP-Plus
-An extension of the TFTP 1350 file transfer protocol.
+An extension to the TFTP 1350 file transfer protocol.
 
 ```
 Network Working Group                                   E. Hopperdietzel
@@ -30,14 +30,14 @@ Acknowlegements
 
    The protocol was originally designed by Noel Chiappa, and was
    redesigned by him, Bob Baldwin and Dave Clark, with comments from
-   Steve Szymanski. 
+   Steve Szymanski.
 
-   This research was inspired by Christian Lazo, professor of the 
+   This research was inspired by Christian Lazo, professor of
    Networks at Universidad Austral de Chile.
 
 1. Changes
 
-   TFTP+ is an extention to the TFTP protocol, which includes the next
+   TFTP+ is an extension to the TFTP protocol, which includes the next
    features:
 
    User authentication
@@ -46,7 +46,7 @@ Acknowlegements
       This allows clients to comunicate with a server from multiple
       devices simultaneusly.
       It also adds an extra control layer to the server, allowing
-      it to restrict file and directory accesss to certain users.
+      to restrict file and directory accesss to certain users.
 
    Servers directory navigation
 
@@ -60,7 +60,7 @@ Acknowlegements
 
    Simultaneus file transfer
 
-      Client and servers can now transfer up to 255 simultaneus files 
+      Client and servers can now transfer up to 255 simultaneus files
       using the same ip and port.
 
 
@@ -71,9 +71,9 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
 2. Messages
 
-   Messages from clients to server are called requests and messages from 
-   server to clients are called events. All messages sizes must be of 
-   512 bytes or less. The first byte of every message must contain a 
+   Messages from clients to server are called requests and messages from
+   server to clients are called events. All messages sizes must be of
+   512 bytes or less. The first byte of every message must contain a
    signed char with the id of the message. Negative ids represent errors.
 
 3. Data types ( big-endian )
@@ -85,7 +85,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    |-----------------------------
    | char               | 1 byte
    |-----------------------------
-   | unsigned short     | 2 bytes 
+   | unsigned short     | 2 bytes
    |-----------------------------
    | unsigned integer   | 4 bytes
    |-----------------------------
@@ -97,7 +97,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
    TFTP+ uses sha256 hash tokens to let servers authenticate users.
 
-   To get an auth token from the server a client must send the 
+   To get an auth token from the server a client must send the
    following request:
 
    |------------------------------------------------------------------
@@ -106,23 +106,23 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char   | unsigned short        | char(254) | char(254)
    |------------------------------------------------------------------
 
-   Where the request id is 0, the token expiration time is an unsigned 
-   short representing the expiration time in hours from now (0 for no 
+   Where the request id is 0, the token expiration time is an unsigned
+   short representing the expiration time in hours from now (0 for no
    expiration), and the username and password are ascii strings.
-   If the username or password length are shorter than 254 characters, 
+   If the username or password length are shorter than 254 characters,
    bytes on the right must be filled with '\0'.
 
-   Once the server gets the request, it must validate the client 
-   credentials. If the credentials are invalid it must send the 
+   Once the server gets the request, it must validate the client
+   credentials. If the credentials are invalid it must send the
    following error event:
 
    |--------------
-   | event id(-1) 
+   | event id(-1)
    |--------------
-   | signed char  
+   | signed char
    |--------------
 
- 
+
 
 Hopperdietzel                                                   [Page 2]
 
@@ -136,19 +136,19 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char | unsigned short | char(12)              | char(32)
    |-----------------------------------------------------------------
 
-   Where the user id must be unique for each client credentials (users 
+   Where the user id must be unique for each client credentials (users
    could be stored for example in a database).
-   The token expiration date is calculated with the current server time 
+   The token expiration date is calculated with the current server time
    plus the time requested by the client.
 
-   It is a 12 char string with the following structure: 
-   
-      ddmmyyyyHHMMSS (day,month,year,hour,minute,second). 
-   
-   If the requested time is 0, then the date string must be random 
+   It is a 12 char string with the following structure:
+
+      ddmmyyyyHHMMSS (day,month,year,hour,minute,second).
+
+   If the requested time is 0, then the date string must be random
    with the first character being '-'.
 
-   The token is calculated using the sha256 hash algorithm, so the 
+   The token is calculated using the sha256 hash algorithm, so the
    server must keep and use a secret key string.
 
       32 bytes token = sha256(
@@ -158,31 +158,31 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
             bytes(expiration date)
          ))
 
-   The client then must keep the user id, expiration date and token 
+   The client then must keep the user id, expiration date and token
    and send it in the future requests that requires it.
 
-   To check if the token is valid the server must calculate the token 
+   To check if the token is valid the server must calculate the token
    again with the user Id and expiration date sent
    by the client and check if it matches the token (sent by the client).
    If the tokens doesn't match it must send an auth error event:
 
    |--------------
-   | event id(-2) 
+   | event id(-2)
    |--------------
-   | signed char  
+   | signed char
    |--------------
 
-   Else if the tokens matches but it has expired it must send the 
+   Else if the tokens matches but it has expired it must send the
    following event:
 
    |------------------
-   | event id(-2) 
+   | event id(-2)
    |------------------
-   | signed char  
+   | signed char
    |------------------
 
 
-   If some of the messages are lost during the login process, then 
+   If some of the messages are lost during the login process, then
    client and server must timemout and try again.
 
    The client can also request to expire all its active tokens.
@@ -194,13 +194,13 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char   | unsigned short | char(12)              | char(32)
    |------------------------------------------------------------------
 
-   The server then shoud change the secret key used for future token
+   The server then should change the secret key used for future token
    requests (at least for this specific user) and reply with:
 
    |------------------
-   | event id(-128) 
+   | event id(-128)
    |------------------
-   | signed char  
+   | signed char
    |------------------
 
 
@@ -210,10 +210,10 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
 4. Get the current directory index data
 
-   Clients can request the list of files and directory names of the 
+   Clients can request the list of files and directory names of the
    current directory in the server.
 
-   Where format of the index data is a concatenated list of bytes of 
+   Where format of the index data is a concatenated list of bytes of
    blocks with the following structure:
 
    |-------------------------------------------------------
@@ -222,10 +222,10 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | bool          | unsigned short      | char(N)
    |-------------------------------------------------------
 
-   The id of each file or directory is the index in which they 
+   The id of each file or directory is the index in which they
    appear in the list.
 
-   So to get the index the client must send the following request first 
+   So to get the index the client must send the following request first
    to get the total size in bytes of the directory data:
 
    |------------------------------------------------------------
@@ -234,7 +234,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char   | unsigned short | char(12)       | char(32)
    |------------------------------------------------------------
 
-   The server must validate the auth token and reply with the auth 
+   The server must validate the auth token and reply with the auth
    error event if it is invalid.
    If the token is valid it must reply the following event:
 
@@ -244,7 +244,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char | unsigned long long
    |------------------------------------
 
-   Where the second argument is the size in bytes of the current 
+   Where the second argument is the size in bytes of the current
    directory index data formatted as mentioned before.
 
    Once the client gets the index data size, it must reply with:
@@ -259,7 +259,7 @@ Hopperdietzel                                                   [Page 4]
 
 RFC TFTP+                   TFTP+ Revision                  October 2021
 
-   If the answer is True, the server will begin to transfer the data, 
+   If the answer is True, the server will begin to transfer the data,
    else the process ends.
 
    Each packet of index data sent by the server is as follows:
@@ -270,16 +270,16 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char       | unsigned int  | char array
    |-----------------------------------------------------
 
-   Where the length of 'data' must be 507 bytes or less in case of the 
-   last packet. The packet number must represent the order of the 
+   Where the length of 'data' must be 507 bytes or less in case of the
+   last packet. The packet number must represent the order of the
    packets begining with 0.
-   The server can send any amount of packets without requiring previous 
-   client ACK, but it should keep track of the time they were sent and 
-   resend them if timeout. If no ACK is received at all in a certain 
+   The server can send any amount of packets without requiring previous
+   client ACK, but it should keep track of the time they were sent and
+   resend them if timeout. If no ACK is received at all in a certain
    amount of time, the server should stop the transfer.
 
-   The client must be prepared to receive and store the packets in a 
-   random order. Each time it receives a packet must send the 
+   The client must be prepared to receive and store the packets in a
+   random order. Each time it receives a packet must send the
    following ACK:
 
 |---------------------------------------------------------------------------
@@ -289,9 +289,9 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 |---------------------------------------------------------------------------
 
    Including the number of the packet received.
-   It also should keep track of the total amount of bytes of the 'data' 
-   field received. The transfer successfully ends when the server 
-   receives all ACKs and the client receive the total amount of 
+   It also should keep track of the total amount of bytes of the 'data'
+   field received. The transfer successfully ends when the server
+   receives all ACKs and the client receive the total amount of
    bytes of 'data'.
 
 5. Go to previus directory
@@ -305,7 +305,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char   | unsigned short | char(12)       | char(32)
    |------------------------------------------------------------
 
-   The server should check if the client has the permissions to access 
+   The server should check if the client has the permissions to access
    that directory.
    If not, it should reply with one of the following error events:
 
@@ -315,33 +315,33 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
    Prohibited directory access error.
    |-------------------
-   | event id(-4) 
+   | event id(-4)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
    Directory doesn't exist.
    |-------------------
-   | event id(-5) 
+   | event id(-5)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
    Else it should reply:
 
    Go back success response
    |-------------------
-   | event id(3) 
+   | event id(3)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
-   The client then should send again the current directory index data 
+   The client then should send again the current directory index data
    request to get the current index data.
 
 6. Go to directory
 
-   Clients can request to go to a certain directory inside the current 
+   Clients can request to go to a certain directory inside the current
    server directory.
    To do so they must send the index of that directory:
 
@@ -351,22 +351,22 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 | signed char   | unsigned int | unsigned short | char(12)       | char(32)
 |--------------------------------------------------------------------------
 
-   The server should check if the client has the permissions to access 
-   that directory and if the item at that index is a file instead and reply 
+   The server should check if the client has the permissions to access
+   that directory and if the item at that index is a file instead and reply
    with one of the following events:
 
    Prohibited directory access error.
    |-------------------
-   | event id(-4) 
+   | event id(-4)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
    Item at index is not a directory error.
    |-------------------
-   | event id(-5) 
+   | event id(-5)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
 Hopperdietzel                                                   [Page 6]
@@ -375,22 +375,22 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
    Goto success response
    |-------------------
-   | event id(4) 
+   | event id(4)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
-   The client then should send again the current directory index data 
+   The client then should send again the current directory index data
    request to get the current index data.
 
 7. Get file request
 
-   Clients can request a certain file of the current directory in the 
-   server. To do so they first must get a transfer id, server transfer 
-   port and the name and size in bytes of the file sending the 
+   Clients can request a certain file of the current directory in the
+   server. To do so they first must get a transfer id, server transfer
+   port and the name and size in bytes of the file sending the
    following request:
 
-   IMPORTANT! : The client ip address and port from which this request 
+   IMPORTANT! : The client ip address and port from which this request
    is sent is going to be the address and port the server will send and
    receive the future data packets and ACKs.
 
@@ -400,26 +400,26 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 | signed char   | unsigned int | unsigned short | char(12)       | char(32)
 |--------------------------------------------------------------------------
 
-   Where 'index of the file' is the index of the file in the current 
+   Where 'index of the file' is the index of the file in the current
    directory.
 
-   The server should check if the client has the permissions to access 
-   that file, also check if the item at the requested index is not a 
+   The server should check if the client has the permissions to access
+   that file, also check if the item at the requested index is not a
    file and reply with one of the following events:
 
    Item at index is not a file or doesn't exist error.
    |-------------------
-   | event id(-6) 
+   | event id(-6)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
 
    Prohibited file access error.
    |-------------------
-   | event id(-7) 
+   | event id(-7)
    |-------------------
-   | signed char  
+   | signed char
    |-------------------
 
    Success.
@@ -433,16 +433,16 @@ Hopperdietzel                                                   [Page 7]
 
 RFC TFTP+                   TFTP+ Revision                  October 2021
 
-   The 'port' param is the port from which the server will send data 
+   The 'port' param is the port from which the server will send data
    from and receive the client ACKs.
-   The 'transfer id' param let the client and server identify to which 
+   The 'transfer id' param let the client and server identify to which
    file are the data packages and ACKs related to during a transfer.
-   This allows up to 255 simultaneus file transfers for each client with 
+   This allows up to 255 simultaneus file transfers for each client with
    the same address and port.
-   The server should also save the ip address and port of this request, 
+   The server should also save the ip address and port of this request,
    because the future ACKs wont contain authentication data.
 
-   The client then must send the following request from the same ip 
+   The client then must send the following request from the same ip
    address and port of the previus request:
 
 |-----------------------------------------------------------------------------------
@@ -451,7 +451,7 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 | signed char  | unsigned char | bool   | unsigned short | char(12)       | char(32)
 |-----------------------------------------------------------------------------------
 
-   If the value of 'answer' is True then the server will start the 
+   If the value of 'answer' is True then the server will start the
    file transfer:
 
    Each packet of data sent by the server is as follows:
@@ -462,33 +462,33 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    | signed char | unsigned char | unsigned int  | char(506)
    |----------------------------------------------------------------
 
-   Where the length of 'data' must be 506 bytes or less in case of 
+   Where the length of 'data' must be 506 bytes or less in case of
    the last packet.
-   The packet number must represent the order of the packets begining 
-   with 0. The server can send any amount of packets without requiring 
-   previous client ACK, but it should keep track of the time they were 
+   The packet number must represent the order of the packets begining
+   with 0. The server can send any amount of packets without requiring
+   previous client ACK, but it should keep track of the time they were
    sent and resend them if timeout.
-   If no ACK is received at all in a certain amount of time, the 
+   If no ACK is received at all in a certain amount of time, the
    server should stop the transfer.
 
-   The client must be prepared to receive and store the packets 
+   The client must be prepared to receive and store the packets
    in a random order.
    Each time it receives a packet must send the following ACK:
 
    |--------------------------------------
-   | request id(3) | packet number         
+   | request id(3) | packet number
    |--------------------------------------
-   | signed char   | unsigned int          
+   | signed char   | unsigned int
    |--------------------------------------
 
-   IMPORTANT! : Notice that in this case the authentication data is 
-   not required, so the ip address and port should not be changed 
+   IMPORTANT! : Notice that in this case the authentication data is
+   not required, so the ip address and port should not be changed
    during a transfer as mentioned before.
 
    Including the number of the packet received.
-   It also should keep track of the total amount of bytes of the 
+   It also should keep track of the total amount of bytes of the
    'data' field received.
-   The transfer successfully ends when the server receives all ACKs 
+   The transfer successfully ends when the server receives all ACKs
    and the client receive the total amount of bytes of 'data'.
 
 Hopperdietzel                                                   [Page 8]
@@ -497,39 +497,39 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
 
 8. Post file request
 
-   Clients can request to send local files to the current directory 
+   Clients can request to send local files to the current directory
    of the server.
 
-   To do so they first must send the following request (from the ip and 
-   port they will use to send the future packets and receive the 
+   To do so they first must send the following request (from the ip and
+   port they will use to send the future packets and receive the
    server ACKs):
 
 |-------------------------------------------------------------------------------------------------
-| request id(9) | file size in bytes | user id        | token exp date | token    | dest file name 
+| request id(9) | file size in bytes | user id        | token exp date | token    | dest file name
 |-------------------------------------------------------------------------------------------------
 | signed char   | unsigned long long | unsigned short | char(12)       | char(32) | char(457)
 |-------------------------------------------------------------------------------------------------
 
-   Where 'dest file name' is the name the server will use to 
+   Where 'dest file name' is the name the server will use to
    save the file.
 
    The server then must reply with one of the following events:
 
    Prohibited file posting.
    |--------------
-   | event id(-8) 
+   | event id(-8)
    |--------------
    | signed char  
    |--------------
 
    Success
    |-----------------------------------------------
-   | event id(7) | port         | transfer id   
+   | event id(7) | port         | transfer id
    |-----------------------------------------------
-   | signed char | unsigned int | unsigned char 
+   | signed char | unsigned int | unsigned char
    |-----------------------------------------------
 
-   The client then can start sending packets to the port specified 
+   The client then can start sending packets to the port specified
    by the server.
 
    |-----------------------------------------------------------
@@ -541,12 +541,12 @@ RFC TFTP+                   TFTP+ Revision                  October 2021
    The server must ACK every packet with:
 
    |------------------------------------------------
-   | request id(8) | transfer id   | packet number 
+   | request id(8) | transfer id   | packet number
    |------------------------------------------------
-   | signed char   | unsigned char | unsigned int  
+   | signed char   | unsigned char | unsigned int
    |------------------------------------------------
 
-   The transfer successfully ends when the client receives all 
+   The transfer successfully ends when the client receives all
    ACKs and the server receive the total amount of bytes of 'data'.
 
 
@@ -571,7 +571,7 @@ References
 
 Security Considerations
 
-   Since TFTP+ includes no encryption mechanism, it is not recomended 
+   Since TFTP+ includes no encryption mechanism, it is not recomended
    to be used in public networks.
 
 Author's Address
@@ -587,4 +587,5 @@ Author's Address
    EMail: EDUARDO.HOPPERDIETZEL@ALUMNOS.UACH.CL
 
 
-Hopperdietzel                                                   [Page 10]```
+Hopperdietzel                                                   [Page 10]
+
